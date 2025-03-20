@@ -4,6 +4,8 @@ import logging
 import hmac
 import hashlib
 import requests
+import time
+import jwt
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 load_dotenv()
@@ -19,7 +21,8 @@ app = Flask(__name__)
 
 # Environment variables
 GITHUB_SECRET = os.environ.get('GITHUB_SECRET')
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_APP_ID = os.environ.get('GITHUB_APP_ID')
+GITHUB_PRIVATE_KEY = os.environ.get('GITHUB_PRIVATE_KEY', '').replace('\\n', '\n')
 NOTION_TOKEN = os.environ.get('NOTION_TOKEN')
 NOTION_DATABASE_ID = os.environ.get('NOTION_DATABASE_ID')
 
@@ -53,7 +56,36 @@ def verify_signature(payload_body, signature_header):
     ).hexdigest()
     
     return hmac.compare_digest(expected_signature, signature_header)
+
+def get_github_app_token(installation_id):
+    """Get an access token for a GitHub App installation"""
+    now = int(time.time())
+    payload = {
+        'iat': now,
+        'exp': now + (10 * 60),  # 10 minutes expiration
+        'iss': GITHUB_APP_ID
+    }
+    
+    # Create JWT for GitHub App
+    jwt_token = jwt.encode(payload, GITHUB_PRIVATE_KEY, algorithm='RS256')
+    
+    # Get installation token
+    url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    response = requests.post(url, headers=headers)
+    
+    if response.status_code != 201:
+        logger.error(f"Failed to get installation token: {response.text}")
+        raise Exception(f"Failed to get installation token: {response.status_code}")
+    
+    return response.json()['token']
+
 def inspect_database():
+    """Inspect the Notion database structure for debugging"""
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}"
     headers = {
         "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -64,9 +96,10 @@ def inspect_database():
         database = response.json()
         properties = database.get('properties', {})
         for name, prop in properties.items():
-            print(f"Property: {name}, Type: {prop.get('type')}")
+            logger.info(f"Property: {name}, Type: {prop.get('type')}")
     else:
-        print(f"Error: {response.status_code}, {response.text}")
+        logger.error(f"Error inspecting database: {response.status_code}, {response.text}")
+
 def handle_issue_comment(payload):
     """Handle issue comment events"""
     # Check if this is a new comment
@@ -87,6 +120,7 @@ def handle_issue_comment(payload):
     issue_body = issue.get('body', '')
     issue_url = issue.get('html_url')
     repo_full_name = payload.get('repository', {}).get('full_name')
+    installation_id = payload.get('installation', {}).get('id')
     
     logger.info(f"Processing command for issue #{issue_number} in {repo_full_name}")
     
@@ -104,7 +138,8 @@ def handle_issue_comment(payload):
         add_github_comment(
             repo_full_name=repo_full_name,
             issue_number=issue_number,
-            notion_page_id=notion_page_id
+            notion_page_id=notion_page_id,
+            installation_id=installation_id
         )
         
         return jsonify({"status": "success", "notion_page_id": notion_page_id}), 200
@@ -115,38 +150,37 @@ def handle_issue_comment(payload):
 
 def create_notion_ticket(title, description, issue_number, issue_url, repo):
     """Create a new ticket in the Notion database"""
-    inspect_database()
     logger.info(f"Creating Notion ticket for issue #{issue_number}")
     
     # Prepare the properties for the Notion page
     properties = {
-    "Task name": {
-        "title": [
-            {
-                "text": {
-                    "content": f"[#{issue_number}] {title}"
+        "Task name": {
+            "title": [
+                {
+                    "text": {
+                        "content": f"[#{issue_number}] {title}"
+                    }
                 }
+            ]
+        },
+        "Status": {
+            "status": { 
+                "name": "Icebox"
             }
-        ]
-    },
-    "Status": {
-        "status": { 
-            "name": "Icebox"
+        },
+        "GitHub Issue": {
+            "url": issue_url
+        },
+        "Repository": {
+            "rich_text": [
+                {
+                    "text": {
+                        "content": repo
+                    }
+                }
+            ]
         }
-    },
-    "GitHub Issue": {
-        "url": issue_url
-    },
-    "Repository": {
-        "rich_text": [
-            {
-                "text": {
-                    "content": repo
-                }
-            }
-        ]
     }
-}
     
     # Prepare the content for the page
     children = [
@@ -221,16 +255,19 @@ def create_notion_ticket(title, description, issue_number, issue_url, repo):
     logger.info(f"Created Notion ticket: {notion_url}")
     return notion_page_id
 
-def add_github_comment(repo_full_name, issue_number, notion_page_id):
+def add_github_comment(repo_full_name, issue_number, notion_page_id, installation_id):
     """Add a comment to the GitHub issue confirming the Notion ticket was created"""
     logger.info(f"Adding comment to GitHub issue #{issue_number}")
+    
+    # Get an installation token for the GitHub App
+    token = get_github_app_token(installation_id)
     
     notion_url = f"https://notion.so/{notion_page_id.replace('-', '')}"
     comment_body = f"✅ Created Notion ticket: [View in Notion]({notion_url})"
     
     url = f"https://api.github.com/repos/{repo_full_name}/issues/{issue_number}/comments"
     headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
+        "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json"
     }
     data = {
