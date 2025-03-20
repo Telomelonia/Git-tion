@@ -5,6 +5,8 @@ import hmac
 import hashlib
 import requests
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(
@@ -51,7 +53,20 @@ def verify_signature(payload_body, signature_header):
     ).hexdigest()
     
     return hmac.compare_digest(expected_signature, signature_header)
-
+def inspect_database():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}"
+    headers = {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Notion-Version": "2022-06-28"
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        database = response.json()
+        properties = database.get('properties', {})
+        for name, prop in properties.items():
+            print(f"Property: {name}, Type: {prop.get('type')}")
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
 def handle_issue_comment(payload):
     """Handle issue comment events"""
     # Check if this is a new comment
@@ -62,7 +77,7 @@ def handle_issue_comment(payload):
     comment_body = payload.get('comment', {}).get('body', '')
     
     # Check if the command is in the comment
-    if '@bot !send' not in comment_body:
+    if '@git-tion !send' not in comment_body:
         return jsonify({"status": "no command found"}), 200
     
     # Get issue details
@@ -100,37 +115,38 @@ def handle_issue_comment(payload):
 
 def create_notion_ticket(title, description, issue_number, issue_url, repo):
     """Create a new ticket in the Notion database"""
+    inspect_database()
     logger.info(f"Creating Notion ticket for issue #{issue_number}")
     
     # Prepare the properties for the Notion page
     properties = {
-        "Title": {
-            "title": [
-                {
-                    "text": {
-                        "content": f"[#{issue_number}] {title}"
-                    }
+    "Task name": {
+        "title": [
+            {
+                "text": {
+                    "content": f"[#{issue_number}] {title}"
                 }
-            ]
-        },
-        "Status": {
-            "select": {
-                "name": "Icebox"
             }
-        },
-        "GitHub Issue": {
-            "url": issue_url
-        },
-        "Repository": {
-            "rich_text": [
-                {
-                    "text": {
-                        "content": repo
-                    }
-                }
-            ]
+        ]
+    },
+    "Status": {
+        "status": { 
+            "name": "Icebox"
         }
+    },
+    "GitHub Issue": {
+        "url": issue_url
+    },
+    "Repository": {
+        "rich_text": [
+            {
+                "text": {
+                    "content": repo
+                }
+            }
+        ]
     }
+}
     
     # Prepare the content for the page
     children = [
