@@ -1,6 +1,6 @@
 # GitHub to Notion Bridge Bot
 
-A webhook-based application that monitors GitHub issues for specific command comments and automatically creates tickets in a Notion database.
+A webhook-based application that monitors GitHub issues for specific command comments and automatically creates tickets in a Notion database. The bot operates as a dedicated GitHub App with its own identity, ensuring comments and actions appear from the bot account rather than a personal user account.
 
 ## Features
 
@@ -8,6 +8,8 @@ A webhook-based application that monitors GitHub issues for specific command com
 - Creates a new ticket in a specified Notion database in the "Icebox" section
 - Includes relevant information from the GitHub issue (title, description, issue number, link)
 - Replies to the GitHub issue confirming the Notion ticket was created
+- Acts as a dedicated bot with its own identity (rather than using a personal account)
+- Includes automated testing and CI/CD pipeline integration
 
 ## Prerequisites
 
@@ -57,19 +59,11 @@ A webhook-based application that monitors GitHub issues for specific command com
    - Subscribe to events:
      - Issue comment
 5. Create the GitHub App
-6. Generate a private key for authentication
-7. Install the app on your repository
+6. After creation, note your GitHub App ID (you'll need this for the `GITHUB_APP_ID` environment variable)
+7. Generate a private key by clicking "Generate a private key" (you'll need this for the `GITHUB_PRIVATE_KEY` environment variable)
+8. Install the app on your repository by clicking "Install App" in the left sidebar
 
-### 5. Generate a GitHub Personal Access Token
-
-1. Go to your GitHub account settings
-2. Click "Developer settings" > "Personal access tokens" > "Generate new token"
-3. Give it a description
-4. Select the "repo" scope
-5. Click "Generate token"
-6. Copy the token - you'll need this for the `GITHUB_TOKEN` environment variable
-
-### 6. Deploy the Application
+### 5. Deploy the Application
 
 #### Option 1: Deploy to Heroku
 
@@ -83,7 +77,8 @@ A webhook-based application that monitors GitHub issues for specific command com
 
    ```bash
    heroku config:set GITHUB_SECRET=your_github_webhook_secret
-   heroku config:set GITHUB_TOKEN=your_github_personal_access_token
+   heroku config:set GITHUB_APP_ID=your_github_app_id
+   heroku config:set GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nYour Private Key Here\n-----END RSA PRIVATE KEY-----"
    heroku config:set NOTION_TOKEN=your_notion_integration_token
    heroku config:set NOTION_DATABASE_ID=your_notion_database_id
    ```
@@ -107,7 +102,7 @@ A webhook-based application that monitors GitHub issues for specific command com
 #### Option 3: Run Locally (for Development)
 
 1. Clone the repository
-2. Create a `.env` file based on the `.env.example`
+2. Create a `.env` file based on the `.env.sample`
 3. Install dependencies:
    ```bash
    pip install -r requirements.txt
@@ -126,7 +121,55 @@ A webhook-based application that monitors GitHub issues for specific command com
 
 1. Go to any issue in your GitHub repository
 2. Add a comment with the text `@git-tion !send`
-3. The bot will create a Notion ticket and reply with a confirmation comment
+3. The bot will create a Notion ticket and reply with a confirmation comment as the GitHub App
+
+## Testing
+
+### Manual Testing
+
+1. **Create a test issue**: Create a new issue in your repository
+2. **Add a test comment**: Comment `@git-tion !send` on the issue
+3. **Verify Notion creation**: Check that a new entry appears in your Notion database
+4. **Verify GitHub comment**: Ensure the bot (not your personal account) added a confirmation comment with a link to the Notion page
+
+### Automated Testing
+
+The repository includes automated tests to verify the core functionality. To run tests:
+
+```bash
+# Install test dependencies
+pip install -r requirements-dev.txt
+
+# Run tests
+pytest
+```
+
+### Test Files
+
+- `test_webhook.py`: Tests webhook signature verification and payload handling
+- `test_notion.py`: Tests Notion API integration
+- `test_github_app.py`: Tests GitHub App authentication and API operations
+
+## Continuous Integration
+
+This project includes GitHub Actions workflows for continuous integration:
+
+### Pull Request Workflow
+
+The workflow runs on pull requests to ensure code quality and functionality:
+
+1. Linting with flake8
+2. Type checking with mypy
+3. Running unit tests with pytest
+4. Security scanning with bandit
+
+### Push Workflow
+
+The workflow runs on pushes to the main branch:
+
+1. Runs all tests
+2. Builds the application
+3. (Optional) Deploys to your chosen platform
 
 ## Customization
 
@@ -151,3 +194,40 @@ You can modify the following aspects of the bot:
 - Ensure your integration has been given access to the database
 - Check that the database ID is correct
 - Verify your database has the required properties (Title, Status, GitHub Issue, Repository)
+
+### GitHub App Authentication Issues
+
+- Verify your GitHub App ID is correct
+- Ensure your private key is properly formatted with `\n` newlines
+- Check that your GitHub App has the necessary permissions
+- Verify the app is installed on the repository
+
+## Development
+
+### Environment Setup
+
+Create a `.env` file with the following variables:
+
+```
+# GitHub API credentials
+GITHUB_SECRET=your_github_webhook_secret
+GITHUB_APP_ID=your_github_app_id
+GITHUB_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nYour Private Key Here\n-----END RSA PRIVATE KEY-----
+
+# Notion API credentials
+NOTION_TOKEN=your_notion_integration_token
+NOTION_DATABASE_ID=your_notion_database_id
+
+# Optional: Port for the webhook server
+PORT=5000
+```
+
+### Code Structure
+
+- `app.py`: Main application with webhook handling and API integration
+- `test/`: Directory containing test files
+- `.github/workflows/`: CI/CD workflow configuration
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
