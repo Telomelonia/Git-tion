@@ -18,7 +18,50 @@ A webhook-based application that monitors GitHub issues for specific command com
 - Notion account with permission to create integrations
 - A Notion database to store tickets
 
-## Setup Instructions
+## Quick Setup
+
+### Automated Setup (Recommended)
+
+We provide a cross-platform setup script that guides you through the entire configuration process:
+
+```bash
+# Run the Python setup script
+python setup.py
+```
+
+This interactive script will:
+
+1. Check your environment for dependencies
+2. Set up a Python virtual environment
+3. Install all required packages
+4. Generate a secure webhook secret
+5. Guide you through Notion and GitHub App configuration
+6. Create helper scripts for local development
+
+### Platform-Specific Setup Scripts
+
+If you prefer, you can also use platform-specific setup scripts:
+
+**Linux/macOS:**
+
+```bash
+# Make the script executable
+chmod +x setup.sh
+
+# Run the setup script
+./setup.sh
+```
+
+**Windows:**
+
+```bash
+# Run the batch script
+setup.bat
+```
+
+## Manual Setup Instructions
+
+If you prefer to set up manually, follow these detailed steps:
 
 ### 1. Create a Notion Integration
 
@@ -63,9 +106,67 @@ A webhook-based application that monitors GitHub issues for specific command com
 7. Generate a private key by clicking "Generate a private key" (you'll need this for the `GITHUB_PRIVATE_KEY` environment variable)
 8. Install the app on your repository by clicking "Install App" in the left sidebar
 
-### 5. Deploy the Application
+### 5. Environment Setup
 
-#### Option 1: Deploy to Heroku
+Create a `.env` file with the following variables:
+
+```
+# GitHub API credentials
+GITHUB_SECRET=your_github_webhook_secret
+GITHUB_APP_ID=your_github_app_id
+GITHUB_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nYour Private Key Here\n-----END RSA PRIVATE KEY-----
+
+# Notion API credentials
+NOTION_TOKEN=your_notion_integration_token
+NOTION_DATABASE_ID=your_notion_database_id
+
+# Optional: Port for the webhook server
+PORT=5000
+```
+
+### 6. Install Dependencies
+
+```bash
+# Create a virtual environment
+python -m venv venv
+
+# Activate the virtual environment
+# On Windows
+venv\Scripts\activate
+# On macOS/Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Deployment Options
+
+### Local Development
+
+After setup, you can run the application locally:
+
+```bash
+# Use the helper script created during setup
+# On Windows
+run_local.bat
+# On macOS/Linux
+./run_local.sh
+
+# Or run directly
+python app.py
+```
+
+For webhook testing, you'll need to expose your local server to the internet:
+
+```bash
+# Using ngrok
+ngrok http 5000
+```
+
+Then update your GitHub App's webhook URL with your ngrok URL.
+
+### Deploy to Heroku
 
 1. Create a new Heroku app:
 
@@ -89,33 +190,19 @@ A webhook-based application that monitors GitHub issues for specific command com
    git push heroku main
    ```
 
-4. Update your GitHub App's webhook URL to your Heroku app URL (e.g., `https://your-app-name.herokuapp.com/webhook`)
+### Docker Deployment
 
-#### Option 2: Deploy to AWS
+1. Build the Docker image:
 
-1. Set up an AWS account if you don't have one
-2. Create an Elastic Beanstalk environment
-3. Upload the code as a zip file or deploy from your Git repository
-4. Configure environment variables in the Elastic Beanstalk console
-5. Update your GitHub App's webhook URL to your AWS app URL
-
-#### Option 3: Run Locally (for Development)
-
-1. Clone the repository
-2. Create a `.env` file based on the `.env.sample`
-3. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   docker build -t git-tion .
    ```
-4. Run the application:
+
+2. Run the container:
+
    ```bash
-   python app.py
+   docker run -p 5000:5000 -e PORT=5000 --env-file .env git-tion
    ```
-5. Use a tool like [ngrok](https://ngrok.com/) to expose your local server to the internet:
-   ```bash
-   ngrok http 5000
-   ```
-6. Update your GitHub App's webhook URL to your ngrok URL (e.g., `https://1234abcd.ngrok.io/webhook`)
 
 ## Usage
 
@@ -144,42 +231,6 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-### Test Files
-
-- `test_webhook.py`: Tests webhook signature verification and payload handling
-- `test_notion.py`: Tests Notion API integration
-- `test_github_app.py`: Tests GitHub App authentication and API operations
-
-## Continuous Integration
-
-This project includes GitHub Actions workflows for continuous integration:
-
-### Pull Request Workflow
-
-The workflow runs on pull requests to ensure code quality and functionality:
-
-1. Linting with flake8
-2. Type checking with mypy
-3. Running unit tests with pytest
-4. Security scanning with bandit
-
-### Push Workflow
-
-The workflow runs on pushes to the main branch:
-
-1. Runs all tests
-2. Builds the application
-3. (Optional) Deploys to your chosen platform
-
-## Customization
-
-You can modify the following aspects of the bot:
-
-- The command trigger (default: `@git-tion !send`)
-- The Notion ticket properties and content
-- The status of new tickets (default: "Icebox")
-- The format of the GitHub confirmation comment
-
 ## Troubleshooting
 
 ### Webhook Not Receiving Events
@@ -201,32 +252,6 @@ You can modify the following aspects of the bot:
 - Ensure your private key is properly formatted with `\n` newlines
 - Check that your GitHub App has the necessary permissions
 - Verify the app is installed on the repository
-
-## Development
-
-### Environment Setup
-
-Create a `.env` file with the following variables:
-
-```
-# GitHub API credentials
-GITHUB_SECRET=your_github_webhook_secret
-GITHUB_APP_ID=your_github_app_id
-GITHUB_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nYour Private Key Here\n-----END RSA PRIVATE KEY-----
-
-# Notion API credentials
-NOTION_TOKEN=your_notion_integration_token
-NOTION_DATABASE_ID=your_notion_database_id
-
-# Optional: Port for the webhook server
-PORT=5000
-```
-
-### Code Structure
-
-- `app.py`: Main application with webhook handling and API integration
-- `test/`: Directory containing test files
-- `.github/workflows/`: CI/CD workflow configuration
 
 ## Contributing
 
