@@ -282,6 +282,15 @@ def add_github_comment(repo_full_name, issue_number, notion_page_id, installatio
     
     logger.info("Added comment to GitHub issue")
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for container orchestration"""
+    return jsonify({
+        "status": "healthy",
+        "version": "1.0.0",
+        "timestamp": time.time()
+    })
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

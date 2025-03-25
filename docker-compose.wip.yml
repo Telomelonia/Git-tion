@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gittion-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/gittion
+      - REDIS_URL=redis://redis:6379/0
+      # Uncomment and fill these for single-tenant mode
+      # - GITHUB_SECRET=${GITHUB_SECRET}
+      # - GITHUB_APP_ID=${GITHUB_APP_ID}
+      # - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
+      # - NOTION_TOKEN=${NOTION_TOKEN}
+      # - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+
+      # Uncomment and fill these for multi-tenant mode
+      # - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      # - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      # - NOTION_CLIENT_ID=${NOTION_CLIENT_ID}
+      # - NOTION_CLIENT_SECRET=${NOTION_CLIENT_SECRET}
+      # - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+    depends_on:
+      - db
+      - redis
+    networks:
+      - gittion-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:14-alpine
+    container_name: gittion-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=gittion
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - gittion-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    container_name: gittion-redis
+    restart: unless-stopped
+    networks:
+      - gittion-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Development tools - commented out by default for production
+
+  # pgadmin:
+  #   image: dpage/pgadmin4
+  #   container_name: gittion-pgadmin
+  #   environment:
+  #     - PGADMIN_DEFAULT_EMAIL=admin@example.com
+  #     - PGADMIN_DEFAULT_PASSWORD=admin
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - db
+  #   networks:
+  #     - gittion-network
+
+  # ngrok:
+  #   image: wernight/ngrok
+  #   container_name: gittion-ngrok
+  #   ports:
+  #     - "4040:4040"
+  #   environment:
+  #     - NGROK_PORT=app:5000
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - gittion-network
+
+volumes:
+  postgres-data:
+
+networks:
+  gittion-network:
+    driver: bridge
